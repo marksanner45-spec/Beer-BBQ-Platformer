@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Beer & BBQ Platformer</title>
+
+<!-- iPhone support -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+<style>
+  body {
+    margin: 0;
+    background: #222;
+    color: white;
+    font-family: sans-serif;
+    text-align: center;
+    overflow: hidden;
+  }
+
+  h1 {
+    margin: 10px 0 5px;
+  }
+
+  canvas {
+    background: linear-gradient(#87ceeb, #f4a460);
+    display: block;
+    margin: auto;
+    border: 3px solid #000;
+    touch-action: none;
+  }
+
+  #controls {
+    display: flex;
+    justify-content: space-between;
+    max-width: 420px;
+    margin: 10px auto;
+    padding: 0 10px;
+  }
+
+  #controls button {
+    font-size: 26px;
+    padding: 15px 22px;
+    border-radius: 12px;
+    border: none;
+    background: #444;
+    color: white;
+    box-shadow: 0 4px #222;
+  }
+
+  #controls button:active {
+    transform: translateY(2px);
+    box-shadow: 0 2px #222;
+  }
+</style>
+</head>
+<body>
+
+<h1>🍺🔥 Beer & BBQ Platformer</h1>
+<p>Desktop: Arrow Keys | Mobile: Touch Buttons</p>
+
+<canvas id="game"></canvas>
+
+<div id="controls">
+  <button id="left">⬅️</button>
+  <button id="jump">⬆️</button>
+  <button id="right">➡️</button>
+</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+/* ---------- Resize for mobile ---------- */
+function resizeCanvas() {
+  canvas.width = Math.min(window.innerWidth, 800);
+  canvas.height = Math.min(window.innerHeight - 200, 400);
+}
+window.addEventListener("resize", resizeCanvas);
+resizeCanvas();
+
+/* ---------- Game Constants ---------- */
+const GRAVITY = 0.6;
+let scrollX = 0;
+let score = 0;
+let gameOver = false;
+
+/* ---------- Player ---------- */
+const playerImg = new Image();
+playerImg.src = "monster1.png"; // optional image
+
+const player = {
+  x: 100,
+  y: 300,
+  w: 48,
+  h: 48,
+  vx: 0,
+  vy: 0,
+  onGround: false
+};
+
+/* ---------- Level Data ---------- */
+const platforms = [
+  { x: 0, y: 350, w: 2000, h: 50 },
+  { x: 300, y: 280, w: 120, h: 20 },
+  { x: 550, y: 240, w: 120, h: 20 },
+  { x: 850, y: 300, w: 150, h: 20 }
+];
+
+const beers = [
+  { x: 350, y: 240, collected: false },
+  { x: 600, y: 200, collected: false },
+  { x: 900, y: 260, collected: false }
+];
+
+const grills = [
+  { x: 500, y: 330, w: 40, h: 20 },
+  { x: 780, y: 330, w: 40, h: 20 }
+];
+
+/* ---------- Input ---------- */
+const keys = {};
+window.addEventListener("keydown", e => keys[e.key] = true);
+window.addEventListener("keyup", e => keys[e.key] = false);
+
+/* ---------- Touch Controls ---------- */
+function bindButton(id, key) {
+  const btn = document.getElementById(id);
+
+  btn.addEventListener("touchstart", e => {
+    e.preventDefault();
+    keys[key] = true;
+  });
+
+  btn.addEventListener("touchend", e => {
+    e.preventDefault();
+    keys[key] = false;
+  });
+}
+
+bindButton("left", "ArrowLeft");
+bindButton("right", "ArrowRight");
+bindButton("jump", "ArrowUp");
+
+/* ---------- Collision ---------- */
+function rectsCollide(a, b) {
+  return (
+    a.x < b.x + b.w &&
+    a.x + a.w > b.x &&
+    a.y < b.y + b.h &&
+    a.y + a.h > b.y
+  );
+}
+
+/* ---------- Update ---------- */
+function update() {
+  if (gameOver) return;
+
+  // Movement
+  if (keys["ArrowRight"]) player.vx = 3;
+  else if (keys["ArrowLeft"]) player.vx = -3;
+  else player.vx = 0;
+
+  if (keys["ArrowUp"] && player.onGround) {
+    player.vy = -12;
+    player.onGround = false;
+  }
+
+  player.vy += GRAVITY;
+  player.x += player.vx;
+  player.y += player.vy;
+
+  // Scrolling
+  if (player.x > canvas.width / 2) {
+    scrollX += player.vx;
+    player.x = canvas.width / 2;
+  }
+  if (scrollX < 0) scrollX = 0;
+
+  // Platforms
+  player.onGround = false;
+  platforms.forEach(p => {
+    const plat = { x: p.x - scrollX, y: p.y, w: p.w, h: p.h };
+    if (rectsCollide(player, plat) && player.vy > 0) {
+      player.y = plat.y - player.h;
+      player.vy = 0;
+      player.onGround = true;
+    }
+  });
+
+  // Beers
+  beers.forEach(b => {
+    if (!b.collected) {
+      const beer = { x: b.x - scrollX, y: b.y, w: 20, h: 30 };
+      if (rectsCollide(player, beer)) {
+        b.collected = true;
+        score++;
+      }
+    }
+  });
+
+  // Grills
+  grills.forEach(g => {
+    const grill = { x: g.x - scrollX, y: g.y, w: g.w, h: g.h };
+    if (rectsCollide(player, grill)) gameOver = true;
+  });
+
+  // Win / Fall
+  if (score === beers.length) gameOver = true;
+  if (player.y > canvas.height) gameOver = true;
+}
+
+/* ---------- Draw ---------- */
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Platforms
+  ctx.fillStyle = "#654321";
+  platforms.forEach(p => {
+    ctx.fillRect(p.x - scrollX, p.y, p.w, p.h);
+  });
+
+  // Beers
+  beers.forEach(b => {
+    if (!b.collected) {
+      ctx.fillStyle = "gold";
+      ctx.fillRect(b.x - scrollX, b.y, 20, 30);
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(b.x - scrollX + 5, b.y + 5, 10, 20);
+    }
+  });
+
+  // Grills
+  grills.forEach(g => {
+    ctx.fillStyle = "red";
+    ctx.fillRect(g.x - scrollX, g.y, g.w, g.h);
+    ctx.fillStyle = "orange";
+    ctx.fillRect(g.x - scrollX, g.y - 5, g.w, 5);
+  });
+
+  // Player
+  if (playerImg.complete) {
+    ctx.drawImage(playerImg, player.x, player.y, player.w, player.h);
+  } else {
+    ctx.fillStyle = "lime";
+    ctx.fillRect(player.x, player.y, player.w, player.h);
+  }
+
+  // UI
+  ctx.fillStyle = "#000";
+  ctx.font = "20px sans-serif";
+  ctx.fillText("🍺 Beers: " + score, 20, 30);
+
+  if (gameOver) {
+    ctx.fillStyle = "rgba(0,0,0,0.7)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#fff";
+    ctx.font = "36px sans-serif";
+    ctx.fillText(
+      score === beers.length ? "You Win! 🍖🍺" : "Game Over",
+      canvas.width / 2 - 120,
+      canvas.height / 2
+    );
+    ctx.font = "18px sans-serif";
+    ctx.fillText("Refresh to play again", canvas.width / 2 - 90, canvas.height / 2 + 30);
+  }
+}
+
+/* ---------- Loop ---------- */
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+
+</body>
+</html>
